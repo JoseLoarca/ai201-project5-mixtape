@@ -163,12 +163,131 @@ worked well.
 
 ### #5: The last song in a playlist never shows up
 #### Reproducing the bug
+Steps:
+1. Get songs from a playlist
+    ```
+   GET /playlists/:playlist_id/songs
+   
+   Inputs:
+    :playlist_id = baef7ad6-e44a-490f-8347-75e14d1d266d
+   
+   Response:
+    HTTP Code 200 OK
+    {
+        "count": 6,
+        "songs": [
+            {
+                "album": null,
+                "artist": "The Wanderers",
+                "genre": "indie rock",
+                "id": "d75a173d-c9d5-4983-971f-08307fb7be43",
+                "share_note": null,
+                "shared_at": "2026-06-27T19:43:52.151299",
+                "shared_by": "4e1d5321-e7ee-44c3-beba-70131366cf40",
+                "tags": [],
+                "title": "Midnight Drive"
+            },
+            {
+                "album": null,
+                "artist": "Elara Moon",
+                "genre": "ambient",
+                "id": "be632b3d-dd3b-4d50-b99e-85300c2744f6",
+                "share_note": null,
+                "shared_at": "2026-06-27T19:43:52.151299",
+                "shared_by": "4e1d5321-e7ee-44c3-beba-70131366cf40",
+                "tags": [],
+                "title": "Still Waters"
+            },
+            {
+                "album": null,
+                "artist": "Coastal Highway",
+                "genre": "indie",
+                "id": "7a647c47-2eb8-4173-8f15-c869d49a6c4e",
+                "share_note": null,
+                "shared_at": "2026-06-27T19:43:52.151299",
+                "shared_by": "4e1d5321-e7ee-44c3-beba-70131366cf40",
+                "tags": [],
+                "title": "First Light"
+            },
+            {
+                "album": null,
+                "artist": "Street Collective",
+                "genre": "hip-hop",
+                "id": "eab3ce10-9c73-4f6a-a27b-f2cca9952343",
+                "share_note": null,
+                "shared_at": "2026-06-29T19:43:52.151299",
+                "shared_by": "b4e0a089-fb4a-4492-97c3-fe7e3d4b4a21",
+                "tags": [
+                    "hip-hop"
+                ],
+                "title": "Block Party"
+            },
+            {
+                "album": null,
+                "artist": "Nova Blix",
+                "genre": "lo-fi",
+                "id": "4e9d1676-a203-492d-a9ce-c1163ba3258a",
+                "share_note": null,
+                "shared_at": "2026-06-29T19:43:52.151299",
+                "shared_by": "b4e0a089-fb4a-4492-97c3-fe7e3d4b4a21",
+                "tags": [
+                    "lo-fi"
+                ],
+                "title": "Late Night Session"
+            },
+            {
+                "album": null,
+                "artist": "Solange K",
+                "genre": "r&b",
+                "id": "bfd0eac7-fd16-45dd-96b1-80c7152ebe89",
+                "share_note": null,
+                "shared_at": "2026-06-29T19:43:52.151299",
+                "shared_by": "b4e0a089-fb4a-4492-97c3-fe7e3d4b4a21",
+                "tags": [
+                    "r&b"
+                ],
+                "title": "Golden Hour"
+            }
+        ]
+    }
+
+    ```
+
+The following screenshot shows that in the database, this playlist has 7 associated songs:
+<img src="/images/playlist_bug.png"/>
 
 #### Finding the root cause
+In order to find the root cause, I navigated from the route, to the service file:
+> Began in: get_songs(playlist_id) (routes/playlists.py) and ended in get_playlist_songs(playlist_id: str) (services/playlist_service.py).
+
+I focused on the query that fetches songs from a playlist and I noticed that it was a simple SELECT query so the bug
+was not in there. 
+
+I then checked the return clause for `get_playlist_songs` and this is where I found that the final list of songs was
+being sliced (`[:-1]`) before being returned.
 
 #### Root Cause
+The playlist entries where being fetched correctly from the database. The issue was that the list of songs was
+being sliced (`[:-1]`) before being returned. This means that the last item of the list was being intentionally
+deleted.
 
 #### Fix and side effect check
+The fix was to remove the slice operation on the list before returning it. So it went from:
+
+```python
+return [song.to_dict() for song in songs[:-1]]
+```
+
+to:
+
+```python
+return [song.to_dict() for song in songs]
+```
+
+Slicing the list is a clear bug as we want to return the items we fetched from the database untouched.
+
+I was sure this was not going to break anything was the slice operation was being performed directly on the value 
+that was about to be returned, so by removing it I was not altering any other behavior.
 
 ---
 
