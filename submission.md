@@ -3,6 +3,7 @@
 ---
 <!-- TOC -->
 * [Project #5 - Mixtape Bug Hunt](#project-5---mixtape-bug-hunt)
+  * [AI Usage](#ai-usage)
   * [Root Cause Analysis](#root-cause-analysis)
     * [#2: Friends Listening Now shows people from yesterday](#2-friends-listening-now-shows-people-from-yesterday)
       * [Reproducing the bug](#reproducing-the-bug)
@@ -41,7 +42,24 @@
       * [The same song keeps showing up twice in search](#the-same-song-keeps-showing-up-twice-in-search)
       * [Friends Listening Now shows people from yesterday](#friends-listening-now-shows-people-from-yesterday)
       * [The last song in a playlist never shows up](#the-last-song-in-a-playlist-never-shows-up)
+  * [Unit Tests](#unit-tests)
+    * [Feed](#feed)
+  * [Git Log](#git-log)
 <!-- TOC -->
+
+---
+## AI Usage
+My AI usage for this project was minimal, compared to the previous AI201 projects.
+
+The only instance were I required AI assistance was when trying to reproduce bug #3. I wasn't able to reproduce the bug
+directly via the API. I added songs, edited songs, searched for songs (obviously), created playlists, listened to songs, 
+etc., and nothing would trigger the bug.
+
+I asked Claude to attempt to reproduce bug #3, not to see if the bug actually existed. AI confirmed that it was not able
+to reproduce the bug, but that it existed. 
+
+So this is where I decided to test by running queries directly on the database and that's when I discovered that the bug
+existed only at the SQL level.
 
 ---
 
@@ -615,3 +633,35 @@ Steps:
 
 The following screenshot shows that in the database, this playlist has 7 associated songs:
 <img src="/images/playlist_bug.png"/>
+
+---
+
+## Unit Tests
+
+### Feed
+I added a unit test to cover the "Listening Now" feature for the feed. This test seeds the database with 3 users:
+- User 1 is friends with both User 2 and User 3
+- User 2 listened to a song 10 minutes ago
+- User 3 last listened to a song 3 hours ago
+
+When fetching the "Listening Now" feed for User 1, there should only be 1 event (from the user who listened to a song 
+10 minutes ago). This test should have caught bug #2, as it is checking that only recent events exist.
+
+This test is located in `tests/test_feed.py`.
+
+---
+## Git Log
+
+Screenshot of git log --oneline:
+<img src="/images/gitlog.png"/>
+
+Output:
+```terminaloutput
+a7f546b (HEAD -> bugfix/mixtape, origin/bugfix/mixtape) fix: removed slice operation on songs lists in get_playlist_songs (playlist_service.py). This fixes bug #5
+cc9313e fix: removed outerjoin clause in search_songs query. this fixes bug #3
+b8f1f3b fix: changed threshold from 24hr to 30min for recent listening events. this fixes bug #2
+264899d (origin/main, origin/HEAD, main) Initial version of submission.md
+2dfdeaa Add .gitignore file and update README with setup instructions
+7b64551 initial commit
+```
+---
