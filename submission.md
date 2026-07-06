@@ -118,12 +118,48 @@ I also checked that the "Listen to a song" and "Listening now" endpoints are wor
 
 ### #3: The same song keeps showing up twice in search
 #### Reproducing the bug
+Steps:
+> This bug could not be reproduced. It seems like the ORM is deduplicating records before returning them.
+> 
+> Even if the bug could not be reproduced, I was able to confirm the bug exists by directly querying the database.
+
+The following screenshot shows that the current query is duplicating records:
+<img src="/images/duplicated_songs.png"/>
 
 #### Finding the root cause
+In order to find the root cause, I navigated from the route, to the service file:
+> Began in: search() (routes/songs.py) and ended in search_songs(query: str) (services/search_service.py).
+
+Since I wasn't able to reproduce the bug using the endpoints, I focused on the query itself. Got the raw query 
+SQLAlchemy is performing.
+
+This:
+```python
+db.session.query(Song).outerjoin(song_tags, Song.id == song_tags.c.song_id)
+                            .filter(db.or_(Song.title.ilike(f"%{query}%"), Song.artist.ilike(f"%{query}%"),))
+```
+
+Turned into this:
+```
+SELECT song.id, song.title, song.artist, song.album, song.genre, song.shared_by, song.shared_at, song.share_note
+FROM song LEFT OUTER JOIN song_tags ON song.id = song_tags.song_id
+WHERE lower(song.title) LIKE lower('%:query%') OR lower(song.artist) LIKE lower('%:query%');
+```
+
+Then I proceeded to test multiple songs by querying directly on the database.
 
 #### Root Cause
+The root cause is that when querying the database, the JOIN clause (`outerjoin(song_tags, Song.id == song_tags.c.song_id)`)
+is making that songs with multiple tags associated (2+) are being shown multiple times.
 
 #### Fix and side effect check
+To fix this, I removed the JOIN clause from the query. The JOIN clause is unnecessary, as when formatting the response 
+for this endpoint, `Song.to_dict()` is called. The `to_dict()` method fetches the tags to show them in the response, so
+removing the JOIN clause doesn't alter the response format for this endpoint.
+
+I was sure this change was not going to break anything because the query is only being used for this endpoint. I also
+tested the endpoint manually by searching for songs with different amounts of tags (1-3), and confirmed that my fix
+worked well.
 
 ### #5: The last song in a playlist never shows up
 #### Reproducing the bug
